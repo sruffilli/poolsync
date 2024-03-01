@@ -26,6 +26,11 @@ convert_to_mp3() {
   local file="$1"
   local filename=$(basename "$file")
   local mp3_filename="${filename%.*}.mp3"
+  local extension="${filename##*.}"
+  if [ "$extension" == "mp3" ]; then
+    echo "Skipping already MP3 file: $file"
+    return
+  fi
   if [ ! -f "$converted_dir/$mp3_filename" ]; then
     if "$show_ffmpeg_output"; then
       ffmpeg -i "$file" -codec:a libmp3lame -qscale:a 2 "$converted_dir/$mp3_filename" 2>&1 | while IFS= read -r line; do
@@ -41,7 +46,9 @@ convert_to_mp3() {
 
 # Function to process audio files in the source directory
 process_files() {
-  local files=("$source_dir"/*)
+  shopt -s globstar
+  local files=("$source_dir"/**/*.*) # Traverse all subdirectories
+  shopt -u globstar
   if [ ${#files[@]} -eq 0 ]; then
     echo "No audio files found in $source_dir"
     exit 1
