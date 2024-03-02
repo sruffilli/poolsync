@@ -30,23 +30,26 @@ convert_to_mp3() {
   local filename=$(basename "$file")
   local mp3_filename="${filename%.*}.mp3"
   local extension="${filename##*.}"
+
+  if [ -f "$converted_dir/$mp3_filename" ]; then
+    echo "File already exists on cache, skipping: $file"
+    return
+  fi
+
   if [ "$extension" == "mp3" ]; then
-    echo "Skipping conversion (already a MP3 file): $file"
+    echo "File is already in mp3 format, skipping conversion: $file"
     cp "$file" "$converted_dir/$mp3_filename"
     return
   fi
 
-  if [ ! -f "$converted_dir/$mp3_filename" ]; then
-    if "$show_ffmpeg_output"; then
-      ffmpeg -i "$file" -codec:a libmp3lame -qscale:a 2 "$converted_dir/$mp3_filename" 2>&1 | while IFS= read -r line; do
-        echo -ne "\r$line"
-      done
-    else
-      ffmpeg -i "$file" -codec:a libmp3lame -qscale:a 2 "$converted_dir/$mp3_filename" &>/dev/null
-    fi
+  if "$show_ffmpeg_output"; then
+    ffmpeg -i "$file" -codec:a libmp3lame -qscale:a 2 "$converted_dir/$mp3_filename" 2>&1 | while IFS= read -r line; do
+      echo -ne "\r$line"
+    done
   else
-    echo "File already converted: $file"
+    ffmpeg -i "$file" -codec:a libmp3lame -qscale:a 2 "$converted_dir/$mp3_filename" &>/dev/null
   fi
+
 }
 
 # Function to process audio files in the source directory and its subdirectories
