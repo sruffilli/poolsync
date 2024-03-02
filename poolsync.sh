@@ -7,10 +7,11 @@ destination_dir=""
 delete_destination=false
 show_ffmpeg_output=false
 show_rsync_output=false
+profile_name=""
 
 # Function to display usage information
 usage() {
-  echo "Usage: $0 -s <source_directory> -d <destination_directory> [-c <converted_directory>] [-r] [-f] [-o]"
+  echo "Usage: $0 -s <source_directory> -d <destination_directory> [-c <converted_directory>] [-r] [-f] [-o] [-p <profile_name>] [-l <profile_name>]"
   echo "Options:"
   echo "  -s <source_directory>: Specify the source directory containing audio files."
   echo "  -d <destination_directory>: Specify the destination directory (SD card) to sync with."
@@ -18,6 +19,8 @@ usage() {
   echo "  -r: Delete everything at the destination directory before starting the sync process."
   echo "  -f: Show ffmpeg output."
   echo "  -o: Show rsync output."
+  echo "  -p <profile_name>: Save the current configuration as a profile with the given name."
+  echo "  -l <profile_name>: Load a profile by name."
   exit 1
 }
 
@@ -28,9 +31,11 @@ convert_to_mp3() {
   local mp3_filename="${filename%.*}.mp3"
   local extension="${filename##*.}"
   if [ "$extension" == "mp3" ]; then
-    echo "Skipping already MP3 file: $file"
+    echo "Skipping conversion (already a MP3 file): $file"
+    cp "$file" "$converted_dir/$mp3_filename"
     return
   fi
+
   if [ ! -f "$converted_dir/$mp3_filename" ]; then
     if "$show_ffmpeg_output"; then
       ffmpeg -i "$file" -codec:a libmp3lame -qscale:a 2 "$converted_dir/$mp3_filename" 2>&1 | while IFS= read -r line; do
@@ -44,7 +49,7 @@ convert_to_mp3() {
   fi
 }
 
-# Function to process audio files in the source directory
+# Function to process audio files in the source directory and its subdirectories
 process_files() {
   shopt -s globstar
   local files=("$source_dir"/**/*.*) # Traverse all subdirectories
@@ -74,8 +79,50 @@ sync_with_destination() {
   fi
 }
 
+# Function to save the current configuration as a profile
+save_profile() {
+  local profile_dir="$HOME/.poolsync"
+  if [ ! -d "$profile_dir" ]; then
+    mkdir -p "$profile_dir"
+  fi
+  if [ -z "$profile_name" ]; then
+    echo "Profile name is required."
+    exit 1
+  fi
+  local profile_file="$profile_dir/$profile_name"
+  echo "source_dir=$source_dir" >"$profile_file"
+  echo "destination_dir=$destination_dir" >>"$profile_file"
+  echo "converted_dir=$converted_dir" >>"$profile_file"
+  echo "delete_destination=$delete_destination" >>"$profile_file"
+  echo "show_ffmpeg_output=$show_ffmpeg_output" >>"$profile_file"
+  echo "show_rsync_output=$show_rsync_output" >>"$profile_file"
+  echo "Profile saved: $profile_name"
+}
+
+# Function to load a profile
+load_profile() {
+  local profile_dir="$HOME/.poolsync"
+  local profile_file="$profile_dir/$profile_name"
+  if [ ! -f "$profile_file" ]; then
+    echo "Profile not found: $profile_name"
+    exit 1
+  fi
+  source "$profile_file"
+}
+
+# Function to list all saved profiles
+list_profiles() {
+  local profile_dir="$HOME/.poolsync"
+  if [ ! -d "$profile_dir" ] || [ -z "$(ls -A $profile_dir)" ]; then
+    echo "No profiles saved."
+  else
+    echo "Saved profiles:"
+    ls "$profile_dir"
+  fi
+}
+
 # Parse command-line options
-while getopts ":s:d:c:rfoh" opt; do
+while getopts ":s:d:c:rfop:l:ih" opt; do
   case $opt in
   s)
     source_dir="$OPTARG"
@@ -94,6 +141,19 @@ while getopts ":s:d:c:rfoh" opt; do
     ;;
   o)
     show_rsync_output=true
+    ;;
+  p)
+    profile_name="$OPTARG"
+    save_profile
+    exit 0
+    ;;
+  l)
+    profile_name="$OPTARG"
+    load_profile
+    ;;
+  i)
+    list_profiles
+    exit 0
     ;;
   h)
     usage
